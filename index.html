@@ -103,6 +103,11 @@
   </div>
 
   <div class="card">
+    <label class="check" style="margin:0"><input type="checkbox" id="showall"> Show all Bluetooth devices
+      (if the reader does not appear in the list)</label>
+  </div>
+
+  <div class="card">
     <h2>3. Progress</h2>
     <div class="bar"><div id="bar"></div></div>
     <pre id="log">Waiting.</pre>
@@ -221,6 +226,7 @@
     try {
       await T.upload(img, target, {
         log,
+        acceptAll: $("showall").checked,
         onProgress: progress,
       });
       log("The reader shows \"Done\" and goes back to the book.");

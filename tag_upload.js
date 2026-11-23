@@ -414,7 +414,9 @@
   async function upload(img, target, { onProgress = () => {}, log = () => {}, chunk = 176, acceptAll = false } = {}) {
     const options = acceptAll
       ? { acceptAllDevices: true, optionalServices: [SERVICE] }
-      : { filters: [{ namePrefix: "ESL_" }], optionalServices: [SERVICE] };
+      // "ESL", not "ESL_": iOS remembers a device by its GATT Device Name, which older tag
+      // firmware sets to just "ESL" (the advertised name is ESL_xxxxxx).
+      : { filters: [{ namePrefix: "ESL" }], optionalServices: [SERVICE] };
     const device = await navigator.bluetooth.requestDevice(options);
     log(`Connecting to ${device.name || "tag"}...`);
     const server = await device.gatt.connect();
