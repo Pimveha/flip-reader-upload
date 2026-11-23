@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flip Reader Upload</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --text: #1d1d1b; --muted: #6b6a66; --line: #dddbd4;
+    --accent: #2f6f4f; --accent-text: #ffffff; --bad: #a33a2b; --good: #2f6f4f; --bar: #e8e6df;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161614; --card: #21211e; --text: #ecebe6; --muted: #a3a29c; --line: #3a3934;
+      --accent: #6fbf94; --accent-text: #10201a; --bad: #e0897b; --good: #6fbf94; --bar: #33322e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 0 0 12px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--muted); font-size: 0.92rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 16px; }
+  label { display: block; font-weight: 600; margin: 10px 0 4px; }
+  input[type=text], select { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--text); font: inherit; }
+  input[type=file] { width: 100%; font: inherit; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .check { display: flex; gap: 8px; align-items: center; font-weight: 400; margin: 10px 0 0; }
+  button { margin-top: 14px; padding: 12px 18px; border: 0; border-radius: 8px; background: var(--accent);
+    color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; width: 100%; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .stats { font-variant-numeric: tabular-nums; margin-top: 8px; }
+  .bad { color: var(--bad); } .good { color: var(--good); }
+  .preview { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-top: 12px; }
+  canvas#prev { width: 122px; height: 250px; image-rendering: pixelated; border: 1px solid var(--line);
+    background: #fff; }
+  @media (min-width: 420px) { canvas#prev { width: 183px; height: 375px; } }
+  .bar { height: 10px; background: var(--bar); border-radius: 5px; overflow: hidden; margin-top: 12px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+  pre#log { white-space: pre-wrap; font: 0.85rem/1.4 ui-monospace, Menlo, monospace; color: var(--muted);
+    margin: 10px 0 0; max-height: 200px; overflow: auto; }
+  ol { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Flip Reader Upload</h1>
+  <p class="muted">Send a book or a sleep screen picture to the e-paper reader over Bluetooth.</p>
+
+  <div class="card" id="nosupport" hidden>
+    <h2>This browser has no Web Bluetooth</h2>
+    <p>Use Chrome or Edge on a computer or an Android phone. On an iPhone, use the
+      Bluefy browser (Safari does not support Web Bluetooth).</p>
+  </div>
+
+  <div class="card">
+    <h2>1. On the reader</h2>
+    <ol>
+      <li>Double press: menu.</li>
+      <li>Short presses to <b>Upload (BLE)</b>, hold to choose.</li>
+      <li>The screen shows "Upload" and the green light is on.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>2a. Send a book</h2>
+    <label for="bookfile">Plain text file (.txt, for example from Project Gutenberg)</label>
+    <input type="file" id="bookfile" accept=".txt,text/plain">
+    <label for="title">Title</label>
+    <input type="text" id="title" placeholder="from the file">
+    <label class="check"><input type="checkbox" id="compress" checked> Compress (fits about 3 times more text)</label>
+    <div class="stats muted" id="bookstats"></div>
+    <button id="sendbook" disabled>Send book</button>
+  </div>
+
+  <div class="card">
+    <h2>2b. Send a sleep screen picture</h2>
+    <label for="imgfile">Picture</label>
+    <input type="file" id="imgfile" accept="image/*">
+    <div class="row">
+      <div style="flex:1; min-width:140px">
+        <label for="fit">Fit</label>
+        <select id="fit"><option value="contain">whole picture</option><option value="cover">fill the screen</option></select>
+      </div>
+      <label class="check" style="margin-top:34px"><input type="checkbox" id="invert"> Invert</label>
+    </div>
+    <div class="preview">
+      <canvas id="prev" width="122" height="250" aria-label="1-bit preview"></canvas>
+      <p class="muted" style="flex:1; min-width:160px">Preview as the reader shows it: 122 x 250 pixels,
+        black and white (dithered). The reader shows it after 2 minutes asleep, or when the button is held 3 s.</p>
+    </div>
+    <button id="sendimg" disabled>Send picture</button>
+  </div>
+
+  <div class="card">
+    <h2>3. Progress</h2>
+    <div class="bar"><div id="bar"></div></div>
+    <pre id="log">Waiting.</pre>
+  </div>
+</main>
+<script src="tag_upload.js"></script>
+<script>
+(() => {
+  "use strict";
+  const T = globalThis.TagUpload;
+  const $ = (id) => document.getElementById(id);
+  const logEl = $("log"), bar = $("bar");
+  const log = (s) => { logEl.textContent = (logEl.textContent === "Waiting." ? "" : logEl.textContent + "\n") + s; logEl.scrollTop = 1e9; };
+  const progress = (d, t) => { bar.style.width = `${t ? (100 * d) / t : 0}%`; };
+  if (!navigator.bluetooth) $("nosupport").hidden = false;
+
+  let book = null;    // { raw, text, file }
+  let sleepImg = null;
+  let busy = false;
+  const setBusy = (b) => { busy = b; $("sendbook").disabled = b || !book; $("sendimg").disabled = b || !sleepImg; };
+
+  function packBook() {
+    if (!book) return null;
+    const title = $("title").value.trim() || $("title").placeholder;
+    return T.packBook(book.text, title, $("compress").checked);
+  }
+
+  function showBookStats() {
+    const st = $("bookstats");
+    try {
+      const img = packBook();
+      const area = 0x74000 - 0x30000;
+      st.innerHTML = `${book.text.length.toLocaleString()} characters of text, packed to ` +
+        `${img.length.toLocaleString()} bytes (${(book.text.length / img.length).toFixed(2)}x). ` +
+        `<span class="good">Fits (${Math.round((100 * img.length) / area)}% of the reader's book space).</span>`;
+      $("sendbook").disabled = busy;
+    } catch (e) {
+      st.innerHTML = `<span class="bad">${e.message}</span>`;
+      $("sendbook").disabled = true;
+    }
+  }
+
+  $("bookfile").addEventListener("change", async () => {
+    const f = $("bookfile").files[0];
+    if (!f) return;
+    const raw = new Uint8Array(await f.arrayBuffer());
+    const head = raw.subarray(0, 2000);
+    const headText = new TextDecoder().decode(head).trimStart().toLowerCase();
+    if (headText.startsWith("<!doctype html") || headText.startsWith("<html")) {
+      $("bookstats").innerHTML = '<span class="bad">This is a web page, not a plain text file.</span>';
+      return;
+    }
+    const { text, unknown } = T.normalise(raw);
+    book = { raw, text, file: f.name };
+    $("title").placeholder = T.guessTitle(raw) || f.name.replace(/\.[^.]*$/, "");
+    if (unknown.size) log(`Note: ${[...unknown.values()].reduce((a, b) => a + b, 0)} characters cannot be shown and become '?'.`);
+    showBookStats();
+  });
+  $("title").addEventListener("input", () => book && showBookStats());
+  $("compress").addEventListener("change", () => book && showBookStats());
+
+  // ---- picture
+  let picture = null;
+  function renderPicture() {
+    if (!picture) return;
+    const W = T.W, H = T.H;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    g.fillStyle = "#fff";
+    g.fillRect(0, 0, W, H);
+    const s = $("fit").value === "cover" ? Math.max(W / picture.width, H / picture.height)
+                                         : Math.min(W / picture.width, H / picture.height);
+    const w = picture.width * s, h = picture.height * s;
+    g.drawImage(picture, (W - w) / 2, (H - h) / 2, w, h);
+    const px = g.getImageData(0, 0, W, H).data;
+    const gray = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      let v = (px[4 * i] * 299 + px[4 * i + 1] * 587 + px[4 * i + 2] * 114) / 1000;
+      gray[i] = $("invert").checked ? 255 - v : v;
+    }
+    sleepImg = T.packSleepImage(gray);
+    // Preview from the packed bits.
+    const p = $("prev").getContext("2d"), out = p.createImageData(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const white = sleepImg[32 + y * 16 + (x >> 3)] & (0x80 >> (x & 7));
+      const o = 4 * (y * W + x);
+      out.data[o] = out.data[o + 1] = out.data[o + 2] = white ? 255 : 0;
+      out.data[o + 3] = 255;
+    }
+    p.putImageData(out, 0, 0);
+    $("sendimg").disabled = busy;
+  }
+  $("imgfile").addEventListener("change", () => {
+    const f = $("imgfile").files[0];
+    if (!f) return;
+    const im = new Image();
+    im.onload = () => { picture = im; renderPicture(); URL.revokeObjectURL(im.src); };
+    im.src = URL.createObjectURL(f);
+  });
+  $("fit").addEventListener("change", renderPicture);
+  $("invert").addEventListener("change", renderPicture);
+
+  // ---- upload
+  async function send(img, target, what) {
+    if (!navigator.bluetooth) { log("This browser cannot use Bluetooth (see above)."); return; }
+    setBusy(true);
+    progress(0, 1);
+    log(`Sending ${what}: ${img.length.toLocaleString()} bytes. Choose the reader (ESL_...) in the list.`);
+    try {
+      await T.upload(img, target, {
+        log,
+        onProgress: progress,
+      });
+      log("The reader shows \"Done\" and opens the book again.");
+    } catch (e) {
+      log(`Failed: ${e.message}`);
+      if (e.name === "NotFoundError") log("No reader chosen. Is it in upload mode (green light on)?");
+    } finally {
+      setBusy(false);
+    }
+  }
+  $("sendbook").addEventListener("click", () => {
+    try { send(packBook(), T.TARGET_BOOK, "the book"); } catch (e) { log(`Failed: ${e.message}`); }
+  });
+  $("sendimg").addEventListener("click", () => sleepImg && send(sleepImg, T.TARGET_IMAGE, "the picture"));
+})();
+</script>
+</body>
+</html>
