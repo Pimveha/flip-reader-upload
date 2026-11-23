@@ -35,6 +35,7 @@
   button { margin-top: 14px; padding: 12px 18px; border: 0; border-radius: 8px; background: var(--accent);
     color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; width: 100%; }
   button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
   .stats { font-variant-numeric: tabular-nums; margin-top: 8px; }
   .bad { color: var(--bad); } .good { color: var(--good); }
   .preview { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-top: 12px; }
@@ -96,6 +97,9 @@
         black and white (dithered). The reader shows it after 2 minutes asleep, or when the button is held 3 s.</p>
     </div>
     <button id="sendimg" disabled>Send picture</button>
+    <button id="resetimg" class="secondary">Reset to the moon screen</button>
+    <p class="muted" style="margin-top:8px">Removes the stored picture: the reader shows its standard
+      sleep screen again (title, moon, reading progress).</p>
   </div>
 
   <div class="card">
@@ -118,7 +122,12 @@
   let book = null;    // { raw, text, file }
   let sleepImg = null;
   let busy = false;
-  const setBusy = (b) => { busy = b; $("sendbook").disabled = b || !book; $("sendimg").disabled = b || !sleepImg; };
+  const setBusy = (b) => {
+    busy = b;
+    $("sendbook").disabled = b || !book;
+    $("sendimg").disabled = b || !sleepImg;
+    $("resetimg").disabled = b;
+  };
 
   function packBook() {
     if (!book) return null;
@@ -207,13 +216,14 @@
     if (!navigator.bluetooth) { log("This browser cannot use Bluetooth (see above)."); return; }
     setBusy(true);
     progress(0, 1);
-    log(`Sending ${what}: ${img.length.toLocaleString()} bytes. Choose the reader (ESL_...) in the list.`);
+    log(img ? `Sending ${what}: ${img.length.toLocaleString()} bytes. Choose the reader (ESL_...) in the list.`
+            : "Resetting the sleep screen. Choose the reader (ESL_...) in the list.");
     try {
       await T.upload(img, target, {
         log,
         onProgress: progress,
       });
-      log("The reader shows \"Done\" and opens the book again.");
+      log("The reader shows \"Done\" and goes back to the book.");
     } catch (e) {
       log(`Failed: ${e.message}`);
       if (e.name === "NotFoundError") log("No reader chosen. Is it in upload mode (green light on)?");
@@ -225,6 +235,7 @@
     try { send(packBook(), T.TARGET_BOOK, "the book"); } catch (e) { log(`Failed: ${e.message}`); }
   });
   $("sendimg").addEventListener("click", () => sleepImg && send(sleepImg, T.TARGET_IMAGE, "the picture"));
+  $("resetimg").addEventListener("click", () => send(null, T.TARGET_IMAGE, "a reset"));
 })();
 </script>
 </body>

@@ -406,8 +406,11 @@
     };
   }
 
-  // Upload over Web Bluetooth. onProgress(done, total), log(text). Chunk 176 fits an ATT
-  // MTU of 185 (macOS); the tag accepts up to 250.
+  const RESET_IMAGE = Uint8Array.of(0x24, TARGET_IMAGE);  // back to the default (moon) sleep screen
+
+  // Upload over Web Bluetooth. img = null resets the sleep image instead.
+  // onProgress(done, total), log(text). Chunk 176 fits an ATT MTU of 185 (macOS); the tag
+  // accepts up to 250.
   async function upload(img, target, { onProgress = () => {}, log = () => {}, chunk = 176, acceptAll = false } = {}) {
     const options = acceptAll
       ? { acceptAllDevices: true, optionalServices: [SERVICE] }
@@ -420,9 +423,10 @@
       const status = async () => parseStatus(await ch.readValue());
       const t0 = Date.now();
       let i = 0;
-      for (const c of commands(img, target, chunk)) {
+      const cmds = img ? commands(img, target, chunk) : [RESET_IMAGE];
+      for (const c of cmds) {
         await ch.writeValueWithResponse(c);
-        if (i === 0 || c[0] === 0x22 || i % 32 === 0) {
+        if (i === 0 || c[0] === 0x22 || c[0] === 0x24 || i % 32 === 0) {
           const st = await status();
           if (st.state === "failed" || st.error !== "ok") throw new Error(`the tag reports: ${st.error}`);
         }
@@ -435,6 +439,10 @@
         st = await status();
       }
       if (st.state !== "done") throw new Error(`upload failed: ${st.error}`);
+      if (!img) {
+        log("Sleep screen reset to the default (moon).");
+        return st;
+      }
       onProgress(img.length, img.length);
       log(`Done in ${((Date.now() - t0) / 1000).toFixed(1)} s, CRC ${st.crc.toString(16).toUpperCase()} checked by the tag.`);
       return st;
@@ -444,7 +452,7 @@
   }
 
   root.TagUpload = {
-    crc32, normalise, guessTitle, toAscii, compress, packBook, packSleepImage, commands, parseStatus, upload,
+    crc32, normalise, guessTitle, toAscii, compress, packBook, packSleepImage, commands, parseStatus, upload, RESET_IMAGE,
     W, H, TARGET_BOOK, TARGET_IMAGE,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);
