@@ -377,7 +377,7 @@
   const TARGET_BOOK = 0, TARGET_IMAGE = 1;
   const STATES = ["idle", "receiving", "done", "failed"];
   const ERRORS = ["ok", "bad command", "bad target", "length", "no begin", "out of order",
-    "flash write failed", "CRC mismatch", "incomplete", "not a book/image header"];
+    "flash write failed", "CRC mismatch", "incomplete", "not a book/image header", "connection lost"];
 
   function* commands(img, target, chunk) {
     const b = new Uint8Array(10);
